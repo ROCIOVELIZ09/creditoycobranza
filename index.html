@@ -467,6 +467,11 @@ function parseCSV(text){
 }
 async function readFile(file){
   const name=file.name;const ext=(name.split('.').pop()||'').toLowerCase();
+  /* Los Excel muy grandes se expanden varias veces en memoria. Este control evita
+     el mensaje engañoso de "sin hojas" y orienta a usar el CSV optimizado. */
+  if((ext==='xlsx'||ext==='xlsm'||ext==='xls')&&file.size>45*1024*1024){
+    throw new Error('El Excel pesa '+(file.size/1048576).toFixed(1).replace('.',',')+' MB y es demasiado grande para procesarlo de forma segura en el navegador. Use la versión CSV optimizada; conserva los registros necesarios y carga mucho más rápido.');
+  }
   const buf=await file.arrayBuffer();
   if(ext==='csv'||ext==='txt'){
     let text=new TextDecoder('utf-8').decode(buf);
@@ -489,6 +494,8 @@ async function handleFiles(list){
   if(S.files.some(f=>f.demo)){S.files=S.files.filter(f=>!f.demo)}
   for(const f of files){try{S.files.push(await readFile(f));ok++}catch(e){errs.push(f.name+': '+(e.message||e))}}
   S.filesDirty=true;
+  /* Si la nueva carga funcionó, elimina errores de intentos anteriores. */
+  if(ok&&!errs.length)lastErr='';
   UI.tab='carga';recalc();
   if(errs.length)showErr(errs.join('\n'));
   if(ok)toast(`${ok} archivo(s) leído(s). Revise cómo se interpretó cada hoja.`);
@@ -1333,3 +1340,4 @@ window.addEventListener('load',()=>{if(R&&(UI.tab==='carga'||UI.tab==='tend'))re
 </script>
 </body>
 </html>
+
