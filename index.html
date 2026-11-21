@@ -256,21 +256,23 @@ const MESESL=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto',
 
 /* ---------- Diccionario de sinónimos (sin tildes ni mayúsculas) ---------- */
 const SYN={
-  cli:['codigo','cod','codigo cliente','cod cliente','cliente codigo','id cliente','codigo del cliente','cod cli','ruc','ruc cliente','ruc ci','cedula ruc','ci ruc','identificacion','cliente'],
-  nom:['nombre cliente','nombre','razon social','cliente nombre','nombre del cliente','nombres','descripcion cliente','nombre comercial','razon social cliente'],
-  venCar:['repre','representante','vendedor','cod vendedor','codigo vendedor','vend','asesor','agente','rep','cod repre','codigo repre','ejecutivo'],
+  cli:['codigo','cod','partner','socio','bp','cod partner','codigo partner','socio comercial','interlocutor','deudor','codigo cliente','cod cliente','cliente codigo','id cliente','codigo del cliente','cod cli','ruc','ruc cliente','ruc ci','cedula ruc','ci ruc','identificacion','cliente'],
+  nom:['nombre cliente','nombre','razon social','nombre 1','nombre1','nombre o razon social','cliente nombre','nombre del cliente','nombres','descripcion cliente','nombre comercial','razon social cliente'],
+  venCar:['repre','representante','vendedor','rep venta','rep vta','rep ventas','representante de ventas','cod vendedor','codigo vendedor','vend','asesor','agente','rep','cod repre','codigo repre','ejecutivo'],
   fdoc:['fecha doc','fecha documento','fecha emision','emision','fecha factura','fecha','f doc','fec doc','fecha de emision'],
   venc:['vencimiento','fecha vencimiento','fecha venc','vence','f venc','fec venc','fecha de vencimiento','vto','fecha vto'],
   dias:['pendiente','dias','dias vencidos','dias vencido','dias mora','mora','dias de mora','antiguedad','dias atraso','atraso','dias vencimiento','dias venc'],
-  tipo:['colum','tipo','tipo doc','tipo documento','clase','td','tipo de documento','clase doc'],
+  tipo:['colum','columna1','columna 1','columna','tipo','tipo doc','tipo documento','clase','td','tipo de documento','clase doc'],
   doc:['doc','documento','numero','nro','no documento','numero documento','num doc','nro documento','factura','no factura','numero factura','comprobante','secuencial','n documento'],
   imp:['importe','valor','total','monto','valor original','valor factura','valor documento','importe original','total factura'],
   saldo:['saldo','saldo pendiente','saldo actual','por cobrar','saldo documento','saldo por cobrar','saldo usd'],
-  limite:['limite','limite credito','limite de credito','cupo','cupo credito','cupo de credito','credito','monto credito','limite cupo'],
+  limite:['limite','limite de','limite cred','lim credito','limite credito','limite de credito','cupo','cupo credito','cupo de credito','credito','monto credito','limite cupo'],
   plazo:['plazo','plazo credito','plazo dias','plazo de credito','dias credito','dias de credito','dias plazo','condicion pago','condicion de pago','plazo pago'],
   tel:['telefono','telefonos','celular','movil','tel','fono','whatsapp','telf','telefono 1','celular 1','contacto'],
   correo:['correo','email','e mail','mail','correo electronico','e mail cliente','correo cliente'],
-  venCli:['vendedor','repre','representante','cod vendedor','codigo vendedor','asesor','agente','ejecutivo','vend'],
+  venCli:['vendedor','repre','representante','rep venta','rep vta','rep ventas','representante de ventas','vendedor asignado','cod vendedor','codigo vendedor','asesor','agente','ejecutivo','vend'],
+  est:['estatus','estado','status','estado cliente','situacion','estatus cliente'],
+  cond:['condicion','condicion de venta','tipo de venta','forma de pago','credito contado','tipo cliente','condicion cliente'],
   venV:['codigo','cod','codigo vendedor','cod vendedor','repre','codigo repre','id','id vendedor','vendedor','representante'],
   vnom:['nombre','nombre vendedor','nombres','vendedor nombre','nombre completo','asesor','nombre del vendedor','vendedor'],
   pdoc:['documento','doc','numero documento','nro documento','num doc','factura','no factura','numero factura','comprobante','documento aplicado','doc aplicado','referencia','factura aplicada'],
@@ -298,7 +300,9 @@ const FIELDS={
     {k:'correo',l:'Correo',kind:'text',s:SYN.correo},
     {k:'nom',l:'Nombre del cliente',kind:'text',s:SYN.nom},
     {k:'cli',l:'Código de cliente',kind:'code',s:SYN.cli,req:1},
-    {k:'ven',l:'Código de vendedor',kind:'code',s:SYN.venCli}],
+    {k:'ven',l:'Código de vendedor',kind:'code',s:SYN.venCli},
+    {k:'cond',l:'Condición (crédito/contado)',kind:'text',s:SYN.cond},
+    {k:'est',l:'Estatus del cliente',kind:'text',s:SYN.est}],
   vendedores:[
     {k:'vnom',l:'Nombre del vendedor',kind:'text',s:SYN.vnom,req:1},
     {k:'ven',l:'Código de vendedor',kind:'code',s:SYN.venV,req:1}],
@@ -323,7 +327,7 @@ const ALLSYN=[...new Set(Object.values(SYN).flat())];
 /* ---------- Estado ---------- */
 const DEF_CFG={corte:'',pct:15,prox:7,nc:'79N, NC, N/C',firma:'Departamento de Crédito y Cobranza',soloReal:false,tema:'auto',notif:false,
   loss:{pv:1,t30:3,t60:8,t90:20,t90p:50},concPct:10,sinPago:45,deter:20,delayDef:10,dsoWin:90};
-let S={files:[],cfg:structuredCloneSafe(DEF_CFG),hist:[],gest:{}};
+let S={files:[],cfg:structuredCloneSafe(DEF_CFG),hist:[],gest:{},memo:{},filesDirty:false,saveErr:''};
 let R=null;
 const UI={tab:'dash',det:{q:'',tramo:'',ven:'',estado:'',sort:'dias',dir:-1,limit:300},al:{lvl:'',kind:'',q:'',limit:60},cli:{q:'',cat:'',ven:'',sort:'venc',dir:-1,limit:200},open:{},lastNotif:-1,ficha:null};
 function structuredCloneSafe(o){return JSON.parse(JSON.stringify(o))}
@@ -390,11 +394,16 @@ const cellTxt=v=>{if(v==null)return '';if(typeof v==='number')return String(v);r
 const keyOf=v=>{let s=cellTxt(v).toUpperCase().replace(/\s+/g,'');if(/^\d+(\.0+)?$/.test(s))s=s.replace(/\.0+$/,'').replace(/^0+(?=\d)/,'');return s};
 
 /* ---------- Detección de encabezados, clasificación y mapeo ---------- */
-function score(h,syns){let b=0;for(const s of syns){if(h===s)return 3;if((' '+h+' ').includes(' '+s+' '))b=2}return b}
+function lev(a,b){const m=a.length,n=b.length;let p=Array.from({length:n+1},(_,j)=>j);for(let i=1;i<=m;i++){const c=[i];for(let j=1;j<=n;j++)c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));p=c}return p[n]}
+/* Encabezados con tildes dañadas (p. ej. "Raz罅Social", "C?igo", "L刎ite de"): comparación aproximada */
+const hdrInfo=raw=>{const r=String(raw??'');const n=norm(r);const fz=/[^\x00-\u024F\u2018-\u201F]|\?/.test(r);return {n,c:fz?n.replace(/ /g,''):null}};
+function score(h,syns,c){let b=0;for(const s of syns){if(h===s)return 3;if((' '+h+' ').includes(' '+s+' '))b=2}
+  if(c){for(const s of syns){const sc=s.replace(/ /g,'');if(sc.length<5||Math.abs(sc.length-c.length)>2)continue;const lim=sc.length>=7?2:1;if(lev(c,sc)<=lim){const v=sc.length>=7?3:2;if(v>b)b=v}}}
+  return b}
 function detectHeader(rows){
   let best=-1,bi=0;const lim=Math.min(rows.length,40);
   for(let i=0;i<lim;i++){const r=rows[i]||[];let m=0,txt=0;
-    for(const c of r){if(typeof c==='string'&&c.trim()){txt++;if(score(norm(c),ALLSYN)>=2)m++}}
+    for(const c of r){if(typeof c==='string'&&c.trim()){txt++;const hi=hdrInfo(c);if(score(hi.n,ALLSYN,hi.c)>=2)m++}}
     const sc=m*10+Math.min(txt,8);if(m>=2&&sc>best){best=sc;bi=i}}
   if(best<0){for(let i=0;i<lim;i++){const r=rows[i]||[];if(r.filter(c=>typeof c==='string'&&c.trim()).length>=3)return i}}
   return bi;
@@ -407,8 +416,8 @@ function headersOf(sh){
 }
 function autoMap(headers,type){
   const map={};const fs=FIELDS[type]||[];const cand=[];
-  const nh=headers.map(h=>h.startsWith('(sin título')?'':norm(h));
-  fs.forEach((f,pi)=>nh.forEach((h,ci)=>{if(!h)return;const sc=score(h,f.s);if(sc)cand.push([sc,pi,ci,f.k])}));
+  const nh=headers.map(h=>h.startsWith('(sin título')?{n:''}:hdrInfo(h));
+  fs.forEach((f,pi)=>nh.forEach((h,ci)=>{if(!h.n)return;const sc=score(h.n,f.s,h.c);if(sc)cand.push([sc,pi,ci,f.k])}));
   cand.sort((a,b)=>b[0]-a[0]||a[1]-b[1]||a[2]-b[2]);
   const used=new Set();for(const [,,ci,k] of cand){if(map[k]!=null||used.has(ci))continue;map[k]=ci;used.add(ci)}
   return map;
@@ -420,7 +429,7 @@ function classify(headers,fname,sname){
   for(const t of ['cartera','clientes','vendedores','pagos','ventas']){
     const m=autoMap(headers,t);const has=k=>m[k]!=null?1:0;let s=0;
     if(t==='cartera'){if(has('saldo')&&(has('doc')||has('venc')||has('dias')))s=3+2*has('venc')+2*has('dias')+has('doc')+has('imp')+has('tipo')+has('fdoc')+has('cli');if(/cartera|cxc|por cobrar|antiguedad|saldos/.test(hint))s+=2}
-    if(t==='clientes'){if(has('cli')||has('nom'))s=3*has('limite')+2*has('plazo')+2*has('tel')+2*has('correo')+has('cli')+has('nom');if(carSaldo)s-=3;if(/client|maestro/.test(hint))s+=2}
+    if(t==='clientes'){if(has('cli')||has('nom'))s=3*has('limite')+2*has('plazo')+2*has('tel')+2*has('correo')+has('cli')+has('nom');if(carSaldo)s-=3;if(/client|maestro|partner|socio/.test(hint))s+=2}
     if(t==='vendedores'){if(has('ven')&&has('vnom'))s=2+(headers.length<=4?1:0)+(hdrHas(/vend|repre|asesor/)?2:0)+(/vend|repre|asesor/.test(hint)?2:0);if(autoMap(headers,'clientes').limite!=null)s-=3}
     if(t==='pagos'){if(has('monto')&&has('fpago'))s=2+2*has('doc')+(hdrHas(/pago|cobro|abono|recaud|deposit/)?3:0)+(/pago|cobro|abono|recaud/.test(hint)?3:0);if(carSaldo)s-=5}
     if(t==='ventas'){if(has('imp')&&has('fdoc'))s=2+has('doc')+2*has('venc')+has('cli');if(hdrHas(/pago|cobro|abono|recaud/))s-=3;if(/venta|factur/.test(hint))s+=3;if(carSaldo)s-=5}
@@ -429,12 +438,17 @@ function classify(headers,fname,sname){
   let bt='ignorar',bs=2;for(const [t,s] of Object.entries(res))if(s>bs){bs=s;bt=t}
   return bt;
 }
+const sigOf=h=>{let x=5381;const s=h.map(norm).join('|');for(let i=0;i<s.length;i++)x=((x<<5)+x+s.charCodeAt(i))|0;return 'h'+(x>>>0).toString(36)+'_'+h.length};
 function buildSheet(fname,sname,rows){
   rows=rows.filter(r=>Array.isArray(r));
   const sh={id:uid(),sname,rows,hdr:detectHeader(rows)};
-  sh.headers=headersOf(sh);sh.type=classify(sh.headers,fname,sname);sh.map=autoMap(sh.headers,sh.type);
+  sh.headers=headersOf(sh);
+  const m=S.memo&&S.memo[sigOf(sh.headers)];
+  if(m&&FIELDS[m.type]){sh.type=m.type;sh.map=Object.fromEntries(Object.entries(m.map||{}).filter(([,ci])=>ci<sh.headers.length));sh.memo=true}
+  else{sh.type=classify(sh.headers,fname,sname);sh.map=autoMap(sh.headers,sh.type)}
   return sh;
 }
+function remember(sh){(S.memo||(S.memo={}))[sigOf(sh.headers)]={type:sh.type,map:{...sh.map}};sh.memo=true;S.filesDirty=true}
 function refreshSheet(sh){sh.headers=headersOf(sh);sh.map=autoMap(sh.headers,sh.type)}
 
 /* ---------- Lectura de archivos ---------- */
@@ -471,40 +485,63 @@ async function readFile(file){
   return {id:uid(),name,sheets};
 }
 async function handleFiles(list){
-  const files=[...list];if(!files.length)return;let ok=0;const errs=[];
+  const files=[...list];await READY;if(!files.length)return;let ok=0;const errs=[];
   if(S.files.some(f=>f.demo)){S.files=S.files.filter(f=>!f.demo)}
   for(const f of files){try{S.files.push(await readFile(f));ok++}catch(e){errs.push(f.name+': '+(e.message||e))}}
+  S.filesDirty=true;
   UI.tab='carga';recalc();
   if(errs.length)showErr(errs.join('\n'));
   if(ok)toast(`${ok} archivo(s) leído(s). Revise cómo se interpretó cada hoja.`);
 }
 let lastErr='';function showErr(t){lastErr=t;render()}
 
-/* ---------- Persistencia ---------- */
+/* ---------- Persistencia (IndexedDB, con respaldo en localStorage) ---------- */
+const DB={_p:null,
+  open(){if(this._p)return this._p;this._p=new Promise((res,rej)=>{try{if(!window.indexedDB)return rej(new Error('sin IndexedDB'));const r=indexedDB.open('cxc_modulo_cartera',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);r.onblocked=()=>rej(new Error('bloqueado'))}catch(e){rej(e)}});return this._p},
+  async tx(mode,fn){const db=await this.open();return new Promise((res,rej)=>{const t=db.transaction('kv',mode);const q=fn(t.objectStore('kv'));t.oncomplete=()=>res(q?q.result:undefined);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error||new Error('cancelado'))})},
+  get(k){return this.tx('readonly',st=>st.get(k))},
+  set(k,v){return this.tx('readwrite',st=>st.put(v,k))}
+};
+let useLS=false,saveQ=Promise.resolve();
+const SAVE_ERR='No se pudieron guardar los datos en este navegador (almacenamiento lleno o bloqueado, por ejemplo en ventana privada). Siguen disponibles mientras la página esté abierta; use “Descargar respaldo” para no perderlos.';
+function setSaveErr(t){if(S.saveErr!==t){S.saveErr=t;if(R)render()}}
 function save(){
-  S.saveErr='';
-  const put=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){S.saveErr='No se pudieron guardar todos los datos en este navegador (espacio insuficiente o almacenamiento bloqueado). Siguen disponibles mientras la página esté abierta; use "Descargar respaldo" para no perderlos.'}};
-  put(LS_KEY,{v:2,files:S.files,cfg:S.cfg});put(LS_HIST,S.hist);put(LS_GEST,S.gest);
+  const meta={v:3,cfg:S.cfg,hist:S.hist,gest:S.gest,memo:S.memo};const files=S.filesDirty?S.files:null;S.filesDirty=false;
+  saveQ=saveQ.then(async()=>{
+    try{if(useLS)throw new Error('ls');await DB.set('meta',meta);if(files)await DB.set('files',files);
+      try{localStorage.removeItem(LS_KEY);localStorage.removeItem(LS_HIST);localStorage.removeItem(LS_GEST)}catch(e){}
+      setSaveErr('')}
+    catch(e){try{localStorage.setItem(LS_KEY,JSON.stringify({...meta,files:S.files}));setSaveErr('')}catch(e2){S.filesDirty=true;setSaveErr(SAVE_ERR)}}
+  });
+  return saveQ;
 }
-function load(){
-  try{const raw=localStorage.getItem(LS_KEY);if(raw){const d=JSON.parse(raw);
-    if(d&&Array.isArray(d.files))S.files=d.files;if(d&&d.cfg)S.cfg={...structuredCloneSafe(DEF_CFG),...d.cfg,loss:{...DEF_CFG.loss,...(d.cfg.loss||{})}};}}catch(e){}
-  try{const h=JSON.parse(localStorage.getItem(LS_HIST)||'[]');if(Array.isArray(h))S.hist=h}catch(e){}
-  try{const g=JSON.parse(localStorage.getItem(LS_GEST)||'{}');if(g&&typeof g==='object')S.gest=g}catch(e){}
+async function load(){
+  let meta=null,files=null;
+  try{meta=await DB.get('meta');files=await DB.get('files')}catch(e){useLS=true}
+  if(!meta){/* datos de versiones anteriores guardados en localStorage */
+    try{const d=JSON.parse(localStorage.getItem(LS_KEY)||'null');if(d){meta={cfg:d.cfg,hist:d.hist,gest:d.gest,memo:d.memo};files=d.files}}catch(e){}
+    try{const h=JSON.parse(localStorage.getItem(LS_HIST)||'null');if(Array.isArray(h)){meta=meta||{};meta.hist=meta.hist||h}}catch(e){}
+    try{const g=JSON.parse(localStorage.getItem(LS_GEST)||'null');if(g){meta=meta||{};meta.gest=meta.gest||g}}catch(e){}
+    if(meta)S.filesDirty=true;
+  }
+  if(meta){if(meta.cfg)S.cfg={...structuredCloneSafe(DEF_CFG),...meta.cfg,loss:{...DEF_CFG.loss,...(meta.cfg.loss||{})}};
+    if(Array.isArray(meta.hist))S.hist=meta.hist;if(meta.gest&&typeof meta.gest==='object')S.gest=meta.gest;if(meta.memo)S.memo=meta.memo}
+  if(Array.isArray(files))S.files=files;
+  try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
 }
+function showUsage(){const el=$('#stUse');if(!el)return;try{navigator.storage.estimate().then(e=>{el.textContent=`Espacio usado en este navegador: ${(e.usage/1048576).toFixed(1).replace('.',',')} MB de ${(e.quota/1048576/1024).toFixed(1).replace('.',',')} GB disponibles.`}).catch(()=>{})}catch(e){}}
 function clearAll(){
-  if(!confirm('¿Borrar los archivos cargados y la configuración guardada en este navegador?\n\nEl historial de cortes y la bitácora de gestiones se conservan (se borran aparte).'))return;
-  try{localStorage.removeItem(LS_KEY)}catch(e){}
-  S.files=[];S.cfg=structuredCloneSafe(DEF_CFG);lastErr='';applyTheme();recalc();toast('Archivos y configuración borrados.');
+  if(!confirm('¿Borrar los archivos cargados y la configuración guardada en este navegador?\n\nEl historial de cortes, la bitácora de gestiones y los mapeos recordados se conservan (se borran aparte).'))return;
+  S.files=[];S.filesDirty=true;S.cfg=structuredCloneSafe(DEF_CFG);lastErr='';applyTheme();recalc();toast('Archivos y configuración borrados.');
 }
 function clearHist(){if(!confirm('¿Borrar todo el historial de cortes?'))return;S.hist=[];recalc();toast('Historial borrado.')}
 function clearGest(){if(!confirm('¿Borrar toda la bitácora de gestiones y promesas de pago?'))return;S.gest={};recalc();toast('Bitácora borrada.')}
 function downloadBlob(data,name,type){try{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},800)}catch(e){toast('No se pudo descargar en este navegador.')}}
-function backupOut(){downloadBlob(JSON.stringify({app:'cxc-modulo',v:2,fecha:new Date().toISOString(),files:S.files,cfg:S.cfg,hist:S.hist,gest:S.gest}),`respaldo_cartera_${dayISO(todayDay())}.json`,'application/json')}
+function backupOut(){downloadBlob(JSON.stringify({app:'cxc-modulo',v:3,fecha:new Date().toISOString(),files:S.files,cfg:S.cfg,hist:S.hist,gest:S.gest,memo:S.memo}),`respaldo_cartera_${dayISO(todayDay())}.json`,'application/json')}
 async function backupIn(file){
-  try{const d=JSON.parse(await file.text());if(!d||d.app!=='cxc-modulo')throw new Error('formato');
+  await READY;try{const d=JSON.parse(await file.text());if(!d||d.app!=='cxc-modulo')throw new Error('formato');
     const mode=confirm('¿Reemplazar sus datos actuales por los del respaldo?\n\nAceptar = reemplazar todo.\nCancelar = solo combinar historial y gestiones con los actuales.');
-    if(mode){S.files=d.files||[];S.cfg={...structuredCloneSafe(DEF_CFG),...(d.cfg||{})};S.hist=d.hist||[];S.gest=d.gest||{}}
+    if(mode){S.files=d.files||[];S.filesDirty=true;S.cfg={...structuredCloneSafe(DEF_CFG),...(d.cfg||{})};S.hist=d.hist||[];S.gest=d.gest||{};if(d.memo)S.memo=d.memo}
     else{const byF=new Map(S.hist.map(h=>[h.f,h]));for(const h of d.hist||[])if(!byF.has(h.f))S.hist.push(h);
       for(const [k,arr] of Object.entries(d.gest||{})){const cur=S.gest[k]||[];const ids=new Set(cur.map(g=>g.id));S.gest[k]=cur.concat(arr.filter(g=>!ids.has(g.id)))}}
     S.hist.sort((a,b)=>a.f-b.f);applyTheme();recalc();toast('Respaldo importado.');
@@ -547,7 +584,7 @@ function compute(){
   const master=new Map(),vend=new Map();const pagosRaw=[],ventas=[];const ventasMap=new Map();
   for(const sh of sheets){if(sh.type==='ignorar')continue;has[sh.type]=true;const g=getter(sh);
     if(sh.type==='clientes')for(const r of g.rows){const c=g.get(r,'cli');if(!c)continue;const k=keyOf(c);if(master.has(k))continue;
-      master.set(k,{nom:g.get(r,'nom'),limite:g.get(r,'limite'),plazo:g.get(r,'plazo'),tel:g.get(r,'tel'),correo:g.get(r,'correo'),ven:g.get(r,'ven')})}
+      const lim=g.get(r,'limite');master.set(k,{nom:g.get(r,'nom'),limite:lim!=null&&lim>=9999999?null:lim,limSin:lim!=null&&lim>=9999999,plazo:g.get(r,'plazo'),tel:g.get(r,'tel'),correo:g.get(r,'correo'),ven:g.get(r,'ven'),est:g.get(r,'est'),cond:g.get(r,'cond')})}
     if(sh.type==='vendedores')for(const r of g.rows){const c=g.get(r,'ven');if(!c)continue;const k=keyOf(c);if(!vend.has(k))vend.set(k,g.get(r,'vnom')||c)}
     if(sh.type==='pagos')for(const r of g.rows){const m=g.get(r,'monto'),fp=g.get(r,'fpago');if(m==null||fp==null)continue;
       pagosRaw.push({dk:keyOf(g.get(r,'doc')||''),f:fp,m,venc:g.get(r,'venc'),cliK:g.get(r,'cli')?keyOf(g.get(r,'cli')):''})}
@@ -610,7 +647,7 @@ function compute(){
     d.loss=lossOf(d,cfg);d.prov=d.incl?d.saldo*d.loss:0;
     const pp=(cliPag.get(d.cliK)||[]).filter(p=>p.dk&&p.dk===d.dk);d.pago=pp.length?{tot:sum(pp,p=>p.m),last:Math.max(...pp.map(p=>p.f))}:null;
     let c=clients.get(d.cliK);
-    if(!c){c={k:d.cliK,cod:d.cli||'',nom:d.nom,venNom:d.venNom,venK,tel:m?.tel||'',correo:m?.correo||'',limite:m?.limite??null,plazo:m?.plazo??null,inMaster:!!m,tot:0,tr:{pv:0,t30:0,t60:0,t90:0,t90p:0},trR:{pv:0,t30:0,t60:0,t90:0,t90p:0},maxDiasR:null,fav:0,favN:0,conc:0,concN:0,maxDias:null,prov:0,docs:[]};clients.set(d.cliK,c)}
+    if(!c){c={k:d.cliK,cod:d.cli||'',nom:d.nom,venNom:d.venNom,venK,tel:m?.tel||'',correo:m?.correo||'',limite:m?.limite??null,limSin:!!m?.limSin,est:m?.est||'',cond:m?.cond||'',plazo:m?.plazo??null,inMaster:!!m,tot:0,tr:{pv:0,t30:0,t60:0,t90:0,t90p:0},trR:{pv:0,t30:0,t60:0,t90:0,t90p:0},maxDiasR:null,fav:0,favN:0,conc:0,concN:0,maxDias:null,prov:0,docs:[]};clients.set(d.cliK,c)}
     c.docs.push(d);
     if(d.fav){c.fav+=d.saldo;c.favN++;T.fav+=d.saldo;T.favN++}
     if(d.conc){c.conc+=d.saldo;c.concN++;T.conc+=d.saldo;T.concN++;if(!d.incl)T.concExcl+=d.saldo}
@@ -697,6 +734,10 @@ function compute(){
     else if(c.trR.t90>0)AL.push({lvl:'alta',kind:'t90',ti:'Deuda entre 61 y 90 días',c,am:c.trR.t90,nu:isNew(c,3),ds:`${nV} documento(s) vencido(s), máximo ${mD} días. ${vencBreak}`,rec:rec(c)});
     else if(c.trR.t60>0)AL.push({lvl:'media',kind:'t60',ti:'Deuda entre 31 y 60 días',c,am:c.trR.t60,nu:isNew(c,2),ds:`${nV} documento(s) vencido(s), máximo ${mD} días. ${vencBreak}`,rec:rec(c)});
     if(c.sobre)AL.push({lvl:'alta',kind:'lim',ti:'Sobre su límite de crédito',c,am:c.tot-c.limite,nu:prev?(c.prevTot!=null&&c.prevTot<=c.limite):false,ds:`Debe ${fmt(c.tot)} con un límite de ${fmt(c.limite)} (excede en ${fmt(c.tot-c.limite)}, uso ${pctf(c.uso,0)}).`,rec:'Recomendación: bloquear crédito adicional o solicitar ampliación de cupo con respaldo.'});
+    const en=norm(c.est);
+    if(c.tot>0.01&&/dudos|incobr|legal|judicial/.test(en))AL.push({lvl:'alta',kind:'estado',ti:`Cliente marcado como “${c.est}” con saldo`,c,am:c.tot,ds:`El maestro de clientes lo tiene como ${c.est} y mantiene ${fmt(c.tot)} por cobrar (${fmt(c.venc)} vencido).`,rec:'Recomendación: revisar provisión al 100 % y gestión legal o extrajudicial.'});
+    else if(c.tot>0.01&&/inactiv|bloque|suspend|baja/.test(en))AL.push({lvl:'media',kind:'estado',ti:`Cliente ${c.est.toLowerCase()} con saldo`,c,am:c.tot,ds:`El maestro de clientes lo tiene como ${c.est} pero mantiene ${fmt(c.tot)} por cobrar. Verificar el estatus o depurar el saldo.`});
+    if(c.tot>0.01&&/contado/.test(norm(c.cond))&&c.vencR>0.01)AL.push({lvl:'media',kind:'contado',ti:'Cliente de contado con saldo vencido',c,am:c.vencR,ds:`Su condición en el maestro es ${c.cond}, pero tiene ${fmt(c.vencR)} vencido. Revisar si se le está dando crédito sin aprobación.`});
     if(c.promInc)AL.push({lvl:'alta',kind:'prom',ti:'Promesa de pago incumplida',c,am:c.vencR||c.venc,ds:`Prometió pagar${c.prom.pm?` ${fmt(c.prom.pm)}`:''} el ${fdate(c.prom.pf)} (gestión del ${fdate(c.prom.f)}).${has.pagos?` Pagos registrados desde entonces: ${fmt(c.prom.paid)}.`:' Sigue con deuda vencida.'}`,rec:'Recomendación: escalar la gestión (llamada del jefe de cobranza o carta formal).'});
     if(prev&&c.prevVenc!=null&&c.venc-c.prevVenc>Math.max(300,c.prevVenc*deterP)&&c.venc>0)AL.push({lvl:'media',kind:'deter',ti:'Deterioro desde el corte anterior',c,am:c.venc-c.prevVenc,nu:true,ds:`El vencido subió de ${fmt(c.prevVenc)} (${fdate(prev.f)}) a ${fmt(c.venc)} (+${pctf(c.prevVenc>0?c.venc/c.prevVenc-1:1,0)}).`});
     if(concP>0&&T.tot>0&&c.tot/T.tot>=concP)AL.push({lvl:'media',kind:'concen',ti:'Concentración de cartera',c,am:c.tot,ds:`Este cliente representa ${pctf(c.tot/T.tot)} del total por cobrar (umbral ${cfg.concPct} %).`});
@@ -824,7 +865,7 @@ function render(){
   $('#swReal').checked=!!S.cfg.soloReal;
   document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('on',x.dataset.tab===UI.tab));
   const m=$('#main');
-  if(UI.tab==='carga'){m.innerHTML=vCarga()}
+  if(UI.tab==='carga'){m.innerHTML=vCarga();showUsage()}
   else if(!R.has.cartera||!R.docs.length){m.innerHTML=vEmpty()}
   else if(UI.tab==='dash')m.innerHTML=vDash();
   else if(UI.tab==='tend')m.innerHTML=vTend();
@@ -940,16 +981,16 @@ function renderCliTable(){
   const box=$('#cliBox');if(!box)return;const f=UI.cli;let L=R.cl;
   if(f.q){const q=norm(f.q);L=L.filter(c=>norm(c.nom+' '+c.cod).includes(q))}
   if(f.cat)L=L.filter(c=>c.cat===f.cat);if(f.ven)L=L.filter(c=>c.venNom===f.ven);
-  const val=c=>({nom:c.nom,venNom:c.venNom,score:c.score,tot:c.tot,venc:c.venc,pv:c.tot?c.venc/c.tot:null,t90p:c.trR.t90p,uso:c.uso,dpp:c.dpp,last:c.lastPago,dv:c.prevVenc!=null?c.venc-c.prevVenc:null,ges:c.lastGest?c.lastGest.f:null,prov:c.prov}[f.sort]);
+  const val=c=>({nom:c.nom,venNom:c.venNom,score:c.score,tot:c.tot,venc:c.venc,pv:c.tot?c.venc/c.tot:null,t90p:c.trR.t90p,uso:c.uso,dpp:c.dpp,last:c.lastPago,dv:c.prevVenc!=null?c.venc-c.prevVenc:null,est:(c.est||'')+' '+(c.cond||''),ges:c.lastGest?c.lastGest.f:null,prov:c.prov}[f.sort]);
   L=[...L].sort((a,b)=>{const x=val(a),y=val(b);if(x==null&&y==null)return 0;if(x==null)return 1;if(y==null)return -1;return (typeof x==='string'?x.localeCompare(y,'es'):x-y)*f.dir});
-  const cols=[['nom','Cliente'],['venNom','Vendedor'],['score','Score'],['tot','Por cobrar'],['venc','Vencido'],['pv','% venc.'],['t90p','+90 días (real)'],['uso','Uso límite'],['dpp','Días pago'],['last','Último pago'],['dv','Δ vencido'],['prov','Provisión'],['ges','Última gestión']];
+  const cols=[['nom','Cliente'],['venNom','Vendedor'],['score','Score'],['tot','Por cobrar'],['venc','Vencido'],['pv','% venc.'],['t90p','+90 días (real)'],['uso','Uso límite'],['dpp','Días pago'],['last','Último pago'],['dv','Δ vencido'],['prov','Provisión'],['est','Estatus / condición'],['ges','Última gestión']];
   const numC=new Set(['score','tot','venc','pv','t90p','uso','dpp','dv','prov']);
   box.innerHTML=`<p class="note" style="margin:0 0 8px">${nInt(L.length)} cliente(s) · por cobrar ${fmt(sum(L,c=>c.tot))} · vencido ${fmt(sum(L,c=>c.venc))}</p><div class="tblwrap"><table><thead><tr>${cols.map(([k,l])=>`<th class="sort ${numC.has(k)?'num':''}" data-act="clisort" data-k="${k}">${l}${f.sort===k?(f.dir>0?' ▲':' ▼'):''}</th>`).join('')}</tr></thead><tbody>
-  ${L.slice(0,f.limit).map(c=>`<tr class="click" data-act="ficha" data-k="${esc(c.k)}"><td class="nm">${esc(c.nom)}<div class="cod">${esc(c.cod)}</div></td><td>${esc(c.venNom)}</td><td class="num">${scH(c)}</td><td class="num">${fmt(c.tot)}</td><td class="num">${fmt(c.venc)}</td><td class="num">${c.tot?pctf(c.venc/c.tot,0):'–'}</td><td class="num" style="color:${c.trR.t90p>0?'var(--t90p)':'inherit'}">${fmt(c.trR.t90p)}</td><td class="num" style="color:${c.sobre?'var(--alta)':'inherit'}">${c.uso!=null?pctf(c.uso,0):'–'}</td><td class="num">${c.dpp!=null?n1(c.dpp):'–'}</td><td class="num">${c.lastPago!=null?fdate(c.lastPago):'–'}</td><td class="num">${c.prevVenc!=null?dlt(c.venc,c.prevVenc):'–'}</td><td class="num">${fmt(c.prov)}</td><td>${c.lastGest?`${fdate(c.lastGest.f)} <span class="muted">${esc(c.lastGest.tipo)}</span>${c.promInc?' <span class="tag" style="--c:var(--alta)">incumplida</span>':''}`:'<span class="muted">–</span>'}</td></tr>`).join('')||`<tr><td colspan="${cols.length}" class="muted" style="text-align:center;padding:24px">Sin clientes</td></tr>`}</tbody></table></div>
+  ${L.slice(0,f.limit).map(c=>`<tr class="click" data-act="ficha" data-k="${esc(c.k)}"><td class="nm">${esc(c.nom)}<div class="cod">${esc(c.cod)}</div></td><td>${esc(c.venNom)}</td><td class="num">${scH(c)}</td><td class="num">${fmt(c.tot)}</td><td class="num">${fmt(c.venc)}</td><td class="num">${c.tot?pctf(c.venc/c.tot,0):'–'}</td><td class="num" style="color:${c.trR.t90p>0?'var(--t90p)':'inherit'}">${fmt(c.trR.t90p)}</td><td class="num" style="color:${c.sobre?'var(--alta)':'inherit'}">${c.uso!=null?pctf(c.uso,0):'–'}</td><td class="num">${c.dpp!=null?n1(c.dpp):'–'}</td><td class="num">${c.lastPago!=null?fdate(c.lastPago):'–'}</td><td class="num">${c.prevVenc!=null?dlt(c.venc,c.prevVenc):'–'}</td><td class="num">${fmt(c.prov)}</td><td>${esc(c.est||'')}${c.cond?`<div class="cod">${esc(c.cond)}</div>`:''}</td><td>${c.lastGest?`${fdate(c.lastGest.f)} <span class="muted">${esc(c.lastGest.tipo)}</span>${c.promInc?' <span class="tag" style="--c:var(--alta)">incumplida</span>':''}`:'<span class="muted">–</span>'}</td></tr>`).join('')||`<tr><td colspan="${cols.length}" class="muted" style="text-align:center;padding:24px">Sin clientes</td></tr>`}</tbody></table></div>
   ${L.length>f.limit?`<div class="more"><button class="btn" data-act="climore">Mostrar más</button></div>`:''}`;
 }
 const LVC={alta:['var(--alta)','var(--altabg)','Alta'],media:['var(--media)','var(--mediabg)','Media'],baja:['var(--baja)','var(--bajabg)','Baja']};
-const KINDS={t90p:'Más de 90 días',t90:'61–90 días',t60:'31–60 días',lim:'Sobre límite',prom:'Promesa incumplida',deter:'Deterioro',concen:'Concentración',sinpago:'Sin pagos recientes',dpp:'Paga más tarde',conc:'Por conciliar',fav:'Saldo a favor',promprox:'Promesa próxima',prox:'Por vencer pronto',maestro:'Maestros incompletos'};
+const KINDS={t90p:'Más de 90 días',t90:'61–90 días',t60:'31–60 días',lim:'Sobre límite',prom:'Promesa incumplida',deter:'Deterioro',concen:'Concentración',sinpago:'Sin pagos recientes',dpp:'Paga más tarde',conc:'Por conciliar',fav:'Saldo a favor',promprox:'Promesa próxima',estado:'Estatus del maestro',contado:'Contado con deuda',prox:'Por vencer pronto',maestro:'Maestros incompletos'};
 const gLine=g=>`${fdate(g.f)} · ${esc(g.tipo)}${g.nota?': '+esc(g.nota):''}${g.pf!=null?` — promete pagar${g.pm?' '+fmt(g.pm):''} el ${fdate(g.pf)}`:''}`;
 function vAlertas(){
   const f=UI.al;let L=R.AL;
@@ -1030,8 +1071,8 @@ function exportXLSX(){
     ['DSO (días)',r2(M.dso)],['BPDSO (días)',r2(M.bpdso)],['Días promedio de pago',r2(M.dpp)],['Provisión estimada',r2(T.prov)],['Concentración top 10 (%)',r2(M.top10*100)],
     ['Partidas por conciliar',r2(T.conc)],['Saldos a favor',r2(-T.fav)],['Clientes con saldo',R.nCli],['Clientes sobre límite',R.sobreN],['Alertas urgentes',R.urg],['Cobro esperado 30 días',r2(M.p30)],['Cobro esperado 90 días',r2(M.proj90)],[],
     ['Tramo','Saldo','%','Provisión'],...TRAMOS.map(t=>[t.l,r2(T.tr[t.k]),r2(T.tot?T.tr[t.k]/T.tot*100:0),r2(T.provTr[t.k])])],[34,16,10,14]);
-  add('Clientes',[['Código','Cliente','Vendedor','Score','Categoría','Por cobrar','Por vencer','1-30','31-60','61-90','+90','Vencido','% vencido','Límite','Uso límite %','Días prom. pago','Último pago','Provisión','Teléfono','Correo','Última gestión'],
-    ...[...R.cl].sort((a,b)=>b.tot-a.tot).map(c=>[c.cod,c.nom,c.venNom,c.score,c.cat,r2(c.tot),r2(c.tr.pv),r2(c.tr.t30),r2(c.tr.t60),r2(c.tr.t90),r2(c.tr.t90p),r2(c.venc),c.tot?r2(c.venc/c.tot*100):null,c.limite,c.uso!=null?r2(c.uso*100):null,r2(c.dpp),dt(c.lastPago),r2(c.prov),c.tel,c.correo,c.lastGest?fdate(c.lastGest.f)+' '+c.lastGest.tipo+(c.lastGest.nota?': '+c.lastGest.nota:''):''])],[12,32,22,7,9,13,13,12,12,12,12,13,10,12,10,10,12,12,14,26,40]);
+  add('Clientes',[['Código','Cliente','Vendedor','Score','Categoría','Por cobrar','Por vencer','1-30','31-60','61-90','+90','Vencido','% vencido','Límite','Uso límite %','Días prom. pago','Último pago','Provisión','Teléfono','Correo','Estatus','Condición','Última gestión'],
+    ...[...R.cl].sort((a,b)=>b.tot-a.tot).map(c=>[c.cod,c.nom,c.venNom,c.score,c.cat,r2(c.tot),r2(c.tr.pv),r2(c.tr.t30),r2(c.tr.t60),r2(c.tr.t90),r2(c.tr.t90p),r2(c.venc),c.tot?r2(c.venc/c.tot*100):null,c.limite,c.uso!=null?r2(c.uso*100):null,r2(c.dpp),dt(c.lastPago),r2(c.prov),c.tel,c.correo,c.est,c.cond,c.lastGest?fdate(c.lastGest.f)+' '+c.lastGest.tipo+(c.lastGest.nota?': '+c.lastGest.nota:''):''])],[12,32,22,7,9,13,13,12,12,12,12,13,10,12,10,10,12,12,14,26,40]);
   add('Documentos',[['Código','Cliente','Vendedor','Tipo','Documento','Fecha doc.','Vencimiento','Días','Tramo','Importe','Saldo','Provisión','Estado','Cobro estimado'],
     ...R.docs.map(d=>[d.cli,d.nom,d.venNom,d.tipo,d.doc,dt(d.fdoc),dt(d.venc),d.dias,d.fav?'A favor':TR[d.tramo].l,r2(d.imp),r2(d.saldo),r2(d.prov),estadoOf(d)[0],dt(d.estCobro)])],[12,30,20,7,20,11,11,7,13,12,12,11,13,12]);
   add('Alertas',[['Prioridad','Tipo','Cliente','Código','Vendedor','Monto','Detalle','Recomendación','Nuevo'],...R.AL.map(a=>[LVC[a.lvl][2],KINDS[a.kind]||a.kind,a.c?a.c.nom:'',a.c?a.c.cod:'',a.c?a.c.venNom:'',r2(a.am),a.ds,a.rec||'',a.nu?'Sí':''])],[9,20,30,10,20,12,80,50,6]);
@@ -1054,9 +1095,9 @@ function renderFicha(){
   const docs=[...c.docs].sort((a,b)=>(b.dias??-1e9)-(a.dias??-1e9));
   const tipos=['Llamada','WhatsApp','Correo','Visita','Carta / notificación','Acuerdo de pago','Otro'];
   root.innerHTML=`<div class="overlay" data-act="closeov"><div class="modal" role="dialog" aria-modal="true" aria-label="Ficha de cliente">
-   <div class="mh"><div><h3>${esc(c.nom)}</h3><div class="note">Cód. ${esc(c.cod||'—')} · Vendedor: ${esc(c.venNom)}${c.plazo!=null?` · Plazo ${c.plazo} días`:''}${c.tel?` · Tel. <a href="tel:${esc(String(c.tel).replace(/[^\d+]/g,''))}">${esc(c.tel)}</a>`:''}${c.correo?` · <a href="mailto:${esc(c.correo)}">${esc(c.correo)}</a>`:''}</div></div><button class="btn sm x" data-act="closef">✕ Cerrar</button></div>
+   <div class="mh"><div><h3>${esc(c.nom)}</h3><div class="note">Cód. ${esc(c.cod||'—')}${c.est?` · Estatus: <b>${esc(c.est)}</b>`:''}${c.cond?` · ${esc(c.cond)}`:''} · Vendedor: ${esc(c.venNom)}${c.plazo!=null?` · Plazo ${c.plazo} días`:''}${c.tel?` · Tel. <a href="tel:${esc(String(c.tel).replace(/[^\d+]/g,''))}">${esc(c.tel)}</a>`:''}${c.correo?` · <a href="mailto:${esc(c.correo)}">${esc(c.correo)}</a>`:''}</div></div><button class="btn sm x" data-act="closef">✕ Cerrar</button></div>
    <div class="mb">
-    <div class="mets" style="margin-bottom:12px">${met('Score','',scH(c),c.cat?{A:'Riesgo bajo',B:'Riesgo moderado',C:'Riesgo alto',D:'Riesgo crítico'}[c.cat]:'')}${met('Por cobrar','',fmt(c.tot),c.limite?`Límite ${fmt(c.limite)} · uso ${pctf(c.uso,0)}`:'Sin límite registrado')}${met('Vencido','',fmt(c.venc),c.tot?pctf(c.venc/c.tot)+(c.prevVenc!=null?' · '+dlt(c.venc,c.prevVenc):''):'')}${met('Más de 90 días (real)','Excluye partidas por conciliar.',fmt(c.trR.t90p),c.maxDiasR?`Mora máxima ${c.maxDiasR} días`:'Sin deuda vencida real')}${met('Días promedio de pago','',c.dpp!=null?n1(c.dpp):'–',c.nDelay?`${c.nDelay} pago(s) analizados`:'Sin pagos con vencimiento')}${met('Último pago','',c.lastPago!=null?fdate(c.lastPago):'–',R.has.pagos?`Pagado 12 meses: ${fmt(c.pagTot)}`:'')}${met('Provisión','',fmt(c.prov),'')}${met('A favor / por conciliar','',fmt(-c.fav),`Por conciliar: ${fmt(c.conc)}`)}</div>
+    <div class="mets" style="margin-bottom:12px">${met('Score','',scH(c),c.cat?{A:'Riesgo bajo',B:'Riesgo moderado',C:'Riesgo alto',D:'Riesgo crítico'}[c.cat]:'')}${met('Por cobrar','',fmt(c.tot),c.limite?`Límite ${fmt(c.limite)} · uso ${pctf(c.uso,0)}`:(c.limSin?'Sin límite (999999999)':'Sin límite registrado'))}${met('Vencido','',fmt(c.venc),c.tot?pctf(c.venc/c.tot)+(c.prevVenc!=null?' · '+dlt(c.venc,c.prevVenc):''):'')}${met('Más de 90 días (real)','Excluye partidas por conciliar.',fmt(c.trR.t90p),c.maxDiasR?`Mora máxima ${c.maxDiasR} días`:'Sin deuda vencida real')}${met('Días promedio de pago','',c.dpp!=null?n1(c.dpp):'–',c.nDelay?`${c.nDelay} pago(s) analizados`:'Sin pagos con vencimiento')}${met('Último pago','',c.lastPago!=null?fdate(c.lastPago):'–',R.has.pagos?`Pagado 12 meses: ${fmt(c.pagTot)}`:'')}${met('Provisión','',fmt(c.prov),'')}${met('A favor / por conciliar','',fmt(-c.fav),`Por conciliar: ${fmt(c.conc)}`)}</div>
     <div class="agebar sm" style="margin-bottom:14px">${seg||'<div style="flex:1"></div>'}</div>
     <div class="row-btns" style="margin-top:0"><button class="btn sm pri" data-act="fcopy">📋 Copiar mensaje de cobranza</button>${waPhone(c.tel)?'<button class="btn sm" data-act="fwa">WhatsApp</button>':''}${c.correo?'<button class="btn sm" data-act="fmail">Correo</button>':''}<button class="btn sm" data-act="gocli" data-k="${esc(c.k)}">Abrir en Detalle</button></div>
     <section class="card"><h2>Registrar gestión de cobranza</h2>
@@ -1091,7 +1132,7 @@ function vCarga(){
     const miss=fs.filter(fl=>fl.req&&sh.map[fl.k]==null).map(fl=>fl.l);
     if(sh.type==='cartera'&&sh.map.venc==null&&sh.map.dias==null)miss.push('Vencimiento o Días vencidos');
     const open=UI.open[sh.id]??(sh.type!=='ignorar'&&S.files.length<=4);
-    return `<div class="sheet"><div class="sheethd"><div class="fn">${esc(f.name)}${f.sheets.length>1||sh.sname!=='CSV'?` <small>› ${esc(sh.sname)}</small>`:''}<br><small>${nInt(data.length)} filas de datos${f.demo?' · ejemplo':''}</small></div>
+    return `<div class="sheet"><div class="sheethd"><div class="fn">${esc(f.name)}${f.sheets.length>1||sh.sname!=='CSV'?` <small>› ${esc(sh.sname)}</small>`:''}<br><small>${nInt(data.length)} filas de datos${f.demo?' · ejemplo':''}${sh.memo?' · usando el mapeo que usted corrigió antes':''}</small></div>
       <label>Tipo <select data-ch="type" data-s="${sh.id}">${Object.entries(TYPES).map(([k,l])=>`<option value="${k}" ${sh.type===k?'selected':''}>${l}</option>`).join('')}</select></label>
       <label>Fila de encabezados <input type="number" min="1" max="${sh.rows.length}" value="${sh.hdr+1}" data-ch="hdr" data-s="${sh.id}"></label>
       <button class="btn sm dan" data-act="rmfile" data-f="${f.id}" title="Quitar este archivo">Quitar</button></div>
@@ -1128,7 +1169,7 @@ function vCarga(){
     <label>Ventana para DSO (días de ventas)<input type="number" min="30" max="365" value="${esc(c.dsoWin)}" data-ch="dsoWin"></label>
   </div></section>
   <section class="card"><h2>4. Historial, gestiones y respaldo</h2>
-    <p class="note" style="margin-top:0">${S.hist.length} corte(s) en el historial · ${sum(Object.values(S.gest),a=>a.length)} gestión(es) registradas. El respaldo es un archivo .json con todo (archivos, configuración, historial y gestiones) para pasarlo a otra computadora o a un compañero.</p>
+    <p class="note" style="margin-top:0" id="stUse"></p><p class="note" style="margin-top:0">Las correcciones que haga al mapeo de columnas se recuerdan: la próxima vez que suba un archivo con las mismas columnas se aplican solas. ${S.hist.length} corte(s) en el historial · ${sum(Object.values(S.gest),a=>a.length)} gestión(es) registradas. El respaldo es un archivo .json con todo (archivos, configuración, historial y gestiones) para pasarlo a otra computadora o a un compañero.</p>
     <div class="row-btns" style="margin-bottom:0"><button class="btn" data-act="bkout">⬇ Descargar respaldo</button><button class="btn" data-act="bkin">⬆ Importar respaldo</button><button class="btn" data-act="xlsx">⬇ Reporte Excel completo</button>${S.hist.length?'<button class="btn dan" data-act="clrhist">Borrar historial</button>':''}${Object.keys(S.gest).length?'<button class="btn dan" data-act="clrgest">Borrar gestiones</button>':''}</div>
   </section>`;
 }
@@ -1151,7 +1192,7 @@ document.addEventListener('click',e=>{
   else if(a==='bkin')$('#bkIn').click();
   else if(a==='xlsx')exportXLSX();
   else if(a==='errx'){lastErr='';render()}
-  else if(a==='rmfile'){S.files=S.files.filter(f=>f.id!==b.dataset.f);recalc()}
+  else if(a==='rmfile'){S.files=S.files.filter(f=>f.id!==b.dataset.f);S.filesDirty=true;recalc()}
   else if(a==='hoy'){S.cfg.corte='';recalc()}
   else if(a==='savesnap'){upsertSnap({...snapFromR(),src:S.files.some(f=>f.demo)?'demo':'manual'});recalc();toast('Corte guardado en el historial.')}
   else if(a==='delsnap'){S.hist=S.hist.filter(h=>h.f!==+b.dataset.f);recalc()}
@@ -1184,9 +1225,9 @@ document.addEventListener('click',e=>{
 document.addEventListener('change',e=>{
   const t=e.target;const ch=t.dataset&&t.dataset.ch;if(!ch)return;
   if(ch==='soloReal'){S.cfg.soloReal=t.checked;recalc();return}
-  if(ch==='type'){const sh=findSheet(t.dataset.s);sh.type=t.value;sh.map=autoMap(sh.headers,sh.type);UI.open[sh.id]=true;recalc();return}
-  if(ch==='hdr'){const sh=findSheet(t.dataset.s);const n=Math.max(1,Math.min(sh.rows.length,parseInt(t.value)||1));sh.hdr=n-1;refreshSheet(sh);recalc();return}
-  if(ch==='map'){const sh=findSheet(t.dataset.s);const ci=+t.dataset.c;for(const k of Object.keys(sh.map))if(sh.map[k]===ci)delete sh.map[k];if(t.value)sh.map[t.value]=ci;recalc();return}
+  if(ch==='type'){const sh=findSheet(t.dataset.s);sh.type=t.value;sh.map=autoMap(sh.headers,sh.type);UI.open[sh.id]=true;remember(sh);recalc();return}
+  if(ch==='hdr'){const sh=findSheet(t.dataset.s);const n=Math.max(1,Math.min(sh.rows.length,parseInt(t.value)||1));sh.hdr=n-1;refreshSheet(sh);remember(sh);recalc();return}
+  if(ch==='map'){const sh=findSheet(t.dataset.s);const ci=+t.dataset.c;for(const k of Object.keys(sh.map))if(sh.map[k]===ci)delete sh.map[k];if(t.value)sh.map[t.value]=ci;remember(sh);recalc();return}
   if(ch==='corte'){S.cfg.corte=t.value===dayISO(todayDay())?'':t.value;recalc();return}
   if(ch==='loss'){S.cfg.loss[t.dataset.t]=Number(t.value)||0;recalc();return}
   if(['pct','prox','nc','firma','concPct','sinPago','deter','delayDef','dsoWin'].includes(ch)){S.cfg[ch]=t.type==='number'?Number(t.value):t.value;recalc();return}
@@ -1223,7 +1264,7 @@ function applyTheme(){
 }
 
 /* ---------- Datos de ejemplo (ficticios, simulación de 24 meses) ---------- */
-function loadDemo(){
+async function loadDemo(){await READY;
   let seed=20261121;const rnd=()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
   const hoy=todayDay();const r2=n=>Math.round(n*100)/100;const cm=n=>n.toFixed(2).replace('.',',');
   const cmT=n=>{const [i,dd]=Math.abs(n).toFixed(2).split('.');return (n<0?'-':'')+i.replace(/\B(?=(\d{3})+(?!\d))/g,'.')+','+dd};
@@ -1267,7 +1308,7 @@ function loadDemo(){
   const vts=[['Fecha','Cliente','Documento','Total','Vencimiento'],...inv.map(i=>[i.fd+25569,i.cod,i.doc,i.imp,i.vc+25569])];
   S.files=S.files.filter(f=>!f.demo);
   const F=(name,sn,rows)=>({id:uid(),demo:1,name,sheets:[buildSheet(name,sn,rows)]});
-  S.files.push(F('Cartera_ejemplo.xlsx','Cartera',cart),F('Maestro_clientes_ejemplo.xlsx','Clientes',mae),F('Vendedores_ejemplo.csv','CSV',venT),F('Pagos_ejemplo.csv','CSV',pag),F('Ventas_ejemplo.xlsx','Facturas',vts));
+  S.filesDirty=true;S.files.push(F('Cartera_ejemplo.xlsx','Cartera',cart),F('Maestro_clientes_ejemplo.xlsx','Clientes',mae),F('Vendedores_ejemplo.csv','CSV',venT),F('Pagos_ejemplo.csv','CSV',pag),F('Ventas_ejemplo.xlsx','Facturas',vts));
   /* Historial: cierres de los últimos 12 meses reconstruidos de la simulación */
   S.hist=S.hist.filter(h=>h.src!=='demo');const hk=mKey(hoy);
   for(let i=12;i>=1;i--){const E=mEnd(mAdd(hk,-i));const list=[];for(const iv of inv){if(iv.fd>E)continue;const s=balAt(iv,E);if(s>0.005)list.push({k:keyOf(iv.cod),nom:iv.nom,saldo:s,imp:iv.imp,venc:iv.vc})}upsertSnap(aggSnap(list,E,S.cfg,'demo'))}
@@ -1281,10 +1322,14 @@ function loadDemo(){
 }
 
 /* ---------- Inicio ---------- */
-load();applyTheme();R=compute();if(!R.has.cartera)UI.tab='carga';
-if(R.has.cartera&&R.docs.length&&!S.cfg.corte){upsertSnap(snapFromR());R=compute();save()}
-render();notify();
-window.addEventListener('load',()=>{if(UI.tab==='carga'||UI.tab==='tend')render()});
+$('#main').innerHTML='<div class="card empty"><h3>Cargando datos guardados…</h3></div>';
+const READY=(async()=>{
+  try{await load()}catch(e){}
+  applyTheme();R=compute();if(!R.has.cartera)UI.tab='carga';
+  if(R.has.cartera&&R.docs.length&&!S.cfg.corte){upsertSnap(snapFromR());R=compute()}
+  save();render();notify();
+})();
+window.addEventListener('load',()=>{if(R&&(UI.tab==='carga'||UI.tab==='tend'))render()});
 </script>
 </body>
 </html>

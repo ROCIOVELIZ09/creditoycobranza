@@ -22,4 +22,10 @@ La primera vez se necesita internet para descargar SheetJS 0.18.5 desde cdnjs, q
 - **Alertas** por prioridad (alta, media, baja), con mensaje de cobranza para copiar o enviar por WhatsApp o correo.
 - **Exportación**: reporte Excel completo y respaldo en `.json`.
 
-Los datos se guardan en el `localStorage` del navegador.
+## Formatos reconocidos
+- **Cartera**: columnas Código, Nombre Cliente, Repre., Fecha Doc., Vencimiento, Pendiente, Columna1/Colum (J80 = factura, 79N = nota de crédito), Doc, Importe y Saldo.
+- **Maestro de partners (SAP)**: Partner, Razón Social, CONDICION, Límite de crédito (999999999 = sin límite), Rep.Venta, Estatus y Teléfono. Reconoce encabezados con tildes dañadas.
+- Las correcciones al mapeo de columnas se recuerdan para las próximas cargas.
+
+## Almacenamiento
+Los datos se guardan en el almacenamiento del navegador (IndexedDB), con capacidad para archivos grandes. Para pasarlos a otro equipo, use **Descargar respaldo** e **Importar respaldo**.
